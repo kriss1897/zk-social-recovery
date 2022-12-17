@@ -1,5 +1,8 @@
 # Zero Knowledge - Cross Chain Recovery
 
+App Demo Link: https://drive.google.com/file/d/15lqOOMZTEGsdMAqoCfFryqfac1nKFbTZ/view?usp=sharing
+Oracle Demo: https://drive.google.com/file/d/1TNkKk1p5i7nNwZO2dcoFKsDsbI-VsYLB/view?usp=sharing
+
 This application works as a tool to recover accounts on any chains. With support to validate Mina states on EVM and Solana coming soon, this tool
 can become very useful for account abstraction with a zero knowledge based web2/social recovery.
 
