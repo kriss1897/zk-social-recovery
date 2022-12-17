@@ -12,9 +12,9 @@
  * Build the project: `$ npm run build`
  * Run with node:     `$ node build/src/interact.js <network>`.
  */
-import { Mina, PrivateKey, shutdown } from 'snarkyjs';
+import { Mina, PrivateKey, PublicKey, shutdown } from 'snarkyjs';
 import fs from 'fs/promises';
-import { Add } from './Add.js';
+import { Accounts } from './Accounts.js';
 
 // check command line arg
 let network = process.argv[2];
@@ -42,16 +42,28 @@ let zkAppKey = PrivateKey.fromBase58(key.privateKey);
 const Network = Mina.Network(config.url);
 Mina.setActiveInstance(Network);
 let zkAppAddress = zkAppKey.toPublicKey();
-let zkApp = new Add(zkAppAddress);
+let zkApp = new Accounts(zkAppAddress);
+
+// await fetchAccount({ publicKey: zkAppAddress });
+
+// console.log((await zkApp.trustedOracle.fetch())?.toBase58().toString());
+// console.log(zkApp.controller.get().toString());
 
 // compile the contract to create prover keys
 console.log('compile the contract...');
-await Add.compile();
+await Accounts.compile();
 
 // call update() and send transaction
 console.log('build transaction and create proof...');
 let tx = await Mina.transaction({ feePayerKey: zkAppKey, fee: 0.1e9 }, () => {
-  zkApp.update();
+  // zkApp.setTrustedOracle(PublicKey.fromBase58('B62qkqYvABDBT2vLZnM7WuVGqJL1QvPEwrLnMTyxRRqRTEyrWebiTUr'));
+
+  // zkApp.updateController(EthAddress.fromString('0xC5E5b8D6fF6f1785E536588a68Ef3C162C41119B'));
+  zkApp.setOwner(
+    PublicKey.fromBase58(
+      'B62qkqYvABDBT2vLZnM7WuVGqJL1QvPEwrLnMTyxRRqRTEyrWebiTUr'
+    )
+  );
 });
 await tx.prove();
 console.log('send transaction...');
@@ -59,11 +71,11 @@ let sentTx = await tx.send();
 
 if (sentTx.hash() !== undefined) {
   console.log(`
-Success! Update transaction sent.
+    Success! Update transaction sent.
 
-Your smart contract state will be updated
-as soon as the transaction is included in a block:
-https://berkeley.minaexplorer.com/transaction/${sentTx.hash()}
-`);
+    Your smart contract state will be updated
+    as soon as the transaction is included in a block:
+    https://berkeley.minaexplorer.com/transaction/${sentTx.hash()}
+  `);
 }
 shutdown();

@@ -1,102 +1,298 @@
+import { useEffect, useState } from "react";
+import { PublicKey, Encoding, PrivateKey } from "snarkyjs";
+import { getAddress, isAddress } from "ethers/lib/utils";
 
-import Head from 'next/head';
-import Image from 'next/image';
-import styles from '../styles/Home.module.css';
-import { useEffect, useState } from 'react';
-import type { Add } from '../../contracts/src/';
-import {
-  Mina,
-  isReady,
-  PublicKey,
-  fetchAccount,
-} from 'snarkyjs';
+import ContractABI from "../contracts/SampleAccounts.json";
+import { JsonRpcProvider } from "@ethersproject/providers";
+import { Contract } from "ethers";
 
-export default function Home() {
+import ZkappWorkerClient from "../zkApp/zkappWorkerClient";
+import { Account } from "snarkyjs/dist/node/lib/fetch";
+import { EthAddress } from "../../contracts/build/src/Accounts";
+import { sign } from "crypto";
+
+function SmartContract({
+  address,
+  handleLoaded,
+}: {
+  address: any;
+  handleLoaded: Function;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const [provider] = useState(
+    new JsonRpcProvider(
+      "https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
+    )
+  );
+  const [state, setState] = useState({
+    controller: "0x",
+    oracle: "0x",
+    count: 0,
+  });
+
+  async function loadContract() {
+    const contract = new Contract(getAddress(address), ContractABI, provider);
+
+    const [controller, oracle, count] = await Promise.all([
+      contract.controller(),
+      contract.oracle(),
+      contract.count(),
+    ]);
+
+    setState({ controller, oracle, count });
+
+    setLoaded(true);
+    handleLoaded();
+  }
+
+  if (!loaded) {
+    return (
+      <button
+        className="my-2 px-4 py-2 bg-cyan-200 rounded-md text-cyan-900 font-bold"
+        onClick={loadContract}
+      >
+        Load Contract
+      </button>
+    );
+  }
+
+  return <div>{JSON.stringify(state)}</div>;
+}
+
+function MinaAppController({ controller, handleUpdate }: { controller: string, handleUpdate: Function }) {
+  const [address, setAddress] = useState(controller);
+
+  return <div>
+    <input
+      className="w-full px-4 py-2 rounded-md border-2"
+      placeholder="Address"
+      onChange={(e) => setAddress(e.target.value)}
+    />
+    <button
+        className="my-2 px-4 py-2 bg-cyan-200 rounded-md text-cyan-900 font-bold"
+        onClick={() => handleUpdate(address)}
+      >
+      Set Controller
+    </button>
+  </div>
+}
+
+function MinaAppOracle({ oracle, handleUpdate }: { oracle: string, handleUpdate: Function }) {
+  const [address, setAddress] = useState(oracle);
+
+  return <div>
+    <input
+      className="w-full px-4 py-2 rounded-md border-2"
+      placeholder="Oracle Key"
+      onChange={(e) => setAddress(e.target.value)}
+    />
+    <button
+        className="my-2 px-4 py-2 bg-cyan-200 rounded-md text-cyan-900 font-bold"
+        onClick={() => handleUpdate(address)}
+      >
+      Set Oracle
+    </button>
+  </div>
+}
+
+function MinaApp({
+  client,
+  appPublicKey,
+}: {
+  client: ZkappWorkerClient;
+  appPublicKey: PublicKey;
+}) {
+  const [appState, setAppState] = useState({
+    currentState: null as null | any,
+    creatingTransaction: false,
+  });
+
+  const [contractReady, setContractReady] = useState(false);
+
   useEffect(() => {
-    (async () => {
-      await isReady;
-      const { Add } = await import('../../contracts/build/src/');
-
-      // Update this to use the address (public key) for your zkApp account
-      // To try it out, you can try this address for an example "Add" smart contract that we've deployed to 
-      // Berkeley Testnet B62qisn669bZqsh8yMWkNyCA7RvjrL6gfdr3TQxymDHNhTc97xE5kNV
-      const zkAppAddress = '';
-      // This should be removed once the zkAppAddress is updated.
-      if (!zkAppAddress) {
-        console.error(
-          'The following error is caused because the zkAppAddress has an empty string as the public key. Update the zkAppAddress with the public key for your zkApp account, or try this address for an example "Add" smart contract that we deployed to Berkeley Testnet: B62qqkb7hD1We6gEfrcqosKt9C398VLp1WXeTo1i9boPoqF7B1LxHg4'
-        );
-      }
-
-      const zkApp = new Add(PublicKey.fromBase58(zkAppAddress));
-      
-    })();
+    initialSetup()
+      .then(() => console.log("Compiling Contract"))
+      .then(() => client.compileContract())
+      .then(() => setContractReady(true))
+      .then(() => console.log("Contract Compiled"));
   }, []);
 
+  async function initialSetup() {
+    await client.loadContract();
+    await client!.initZkappInstance(appPublicKey);
+    console.log("getting zkApp state...");
+    await client!.fetchAccount({ publicKey: appPublicKey });
+    const currentState = await client!.getState();
+    console.log("current state:", currentState);
+
+    if (currentState) {
+      const { trustedOracle, owner } = currentState;
+
+      PublicKey.fromBase58(trustedOracle).isEmpty().toJSON() &&
+        delete currentState.trustedOracle;
+      PublicKey.fromBase58(owner).isEmpty().toJSON() &&
+        delete currentState.owner;
+    }
+
+    setAppState({
+      currentState,
+      creatingTransaction: false,
+    });
+  }
+
+  async function handleControllerUpdate(_address: string) {
+    // const address = getAddress(_address);
+
+    const message = Encoding.stringToFields(_address);
+
+    (window as any).mina.signMessage({ message: _address }).then(console.log);
+  }
+
+  if (!appState.currentState) {
+    return <p>Loading</p>;
+  }
+
   return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-        <meta name="description" content="Generated by create next app" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.tsx</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h2>Documentation &rarr;</h2>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h2>Learn &rarr;</h2>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className={styles.card}
-          >
-            <h2>Examples &rarr;</h2>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.card}
-          >
-            <h2>Deploy &rarr;</h2>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <span className={styles.logo}>
-            <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
-          </span>
-        </a>
-      </footer>
+    <div>
+      <ul>
+        <li className="my-2">
+          <span className="text-gray-400 text-sm block">Owner</span>
+          {appState.currentState.owner || "Not Set"}
+        </li>
+        <li className="my-2">
+          <span className="text-gray-400 text-sm block">Google ID</span>
+          {appState.currentState.googleId}
+        </li>
+        <li className="my-2">
+          <span className="text-gray-400 text-sm block">Controller</span>
+          <MinaAppController controller={appState.currentState.controller} handleUpdate={handleControllerUpdate}/>
+        </li>
+        <li className="my-2">
+          <span className="text-gray-400 text-sm block">Trusted Oracle</span>
+          <MinaAppOracle oracle={appState.currentState.trustedOracle} handleUpdate={handleControllerUpdate}/>
+        </li>
+      </ul>
     </div>
   );
 }
 
+function WalletView(props: { account: Account; publicKey: string }) {
+  return (
+    <div>
+      <span className="text-gray-400 text-sm block">Fee Payer</span>
+      {props.publicKey}
+      {/* {props.balance} */}
+    </div>
+  );
+}
+
+export default function Home() {
+  const [address, setAddress] = useState("");
+  const [locked, toggleLock] = useState(false);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
+  const [zkappWorkerClient, setClient] = useState<ZkappWorkerClient>();
+  const [wallet, setWallet] = useState<Account | null>();
+  const [walletPublicKey, setWalletPublicKey] = useState<string | null>(null);
+  const [signerKey, setSignerKey] = useState<string|null>(null);
+
+  useEffect(() => {
+    const client = new ZkappWorkerClient();
+    console.log("Loading SnarkyJS...");
+
+    client
+      .loadSnarkyJS()
+      .then(() => {
+        let privateKeyStr = localStorage.getItem('mina-signer-key');
+
+        if (!privateKeyStr) {
+          privateKeyStr = PrivateKey.random().toBase58().toString();
+
+          localStorage.setItem('mina-signer-key', privateKeyStr);
+        }
+
+        const publicKey = PrivateKey.fromBase58(privateKeyStr).toPublicKey();
+
+        setSignerKey(publicKey.toBase58().toString());
+
+        return client.setSignerKey(privateKeyStr);
+      })
+      .then(() => client.setActiveInstanceToBerkeley())
+      .then(() => {
+        setClient(client);
+        setLibraryLoaded(true);
+        console.log("SnarkyJS Loaded and net set to Berkeley");
+      });
+  }, []);
+
+  useEffect(() => {
+    libraryLoaded && loadWallet();
+  }, [libraryLoaded]);
+
+  async function loadWallet() {
+    const mina = (window as any).mina;
+    if (mina == null) {
+      setWallet(null);
+      return;
+    }
+
+    const publicKeyBase58: string = (await mina.requestAccounts())[0];
+    const publicKey = PublicKey.fromBase58(publicKeyBase58);
+
+    setWalletPublicKey(publicKeyBase58.toString());
+
+    console.log("using key", publicKey.toBase58());
+    console.log("checking if account exists...");
+
+    const res = await zkappWorkerClient!.fetchAccount({
+      publicKey: publicKey!,
+    });
+    const accountExists = res.error == null;
+
+    if (accountExists) {
+      console.log(res.account);
+      setWallet(res.account);
+    } else {
+      setWallet(null);
+    }
+  }
+
+  if (!libraryLoaded) {
+    return <p>Loading</p>;
+  }
+
+  return (
+    <div className="m-8 p-8">
+      <div className="max-w-3xl p-4 mx-auto">
+        {wallet && (
+          <WalletView publicKey={walletPublicKey || ""} account={wallet} />
+        )}
+        <div className="mt-4"><span className="text-gray-400 text-sm block">Signer Key</span> { signerKey }</div>
+      </div>
+      <div className="shadow-lg max-w-3xl rounded-lg p-8 my-4 bg-white mx-auto">
+        {zkappWorkerClient && (
+          <MinaApp
+            client={zkappWorkerClient}
+            appPublicKey={PublicKey.fromBase58(
+              "B62qpHfzjb8tMe8nqk5WMmYq9ZCVsP882UuzjrBhjWTiizAMdXEBi17"
+            )}
+          />
+        )}
+      </div>
+      <div className="shadow-lg max-w-3xl rounded-lg p-8 bg-white mx-auto">
+        <input
+          disabled={locked}
+          readOnly={locked}
+          className="w-full px-4 py-2 rounded-md border-2"
+          placeholder="Address"
+          onChange={(e) => setAddress(e.target.value)}
+        />
+        {isAddress(address) && (
+          <SmartContract
+            address={address}
+            handleLoaded={() => toggleLock(true)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
