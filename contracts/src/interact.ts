@@ -44,11 +44,6 @@ Mina.setActiveInstance(Network);
 let zkAppAddress = zkAppKey.toPublicKey();
 let zkApp = new Accounts(zkAppAddress);
 
-// await fetchAccount({ publicKey: zkAppAddress });
-
-// console.log((await zkApp.trustedOracle.fetch())?.toBase58().toString());
-// console.log(zkApp.controller.get().toString());
-
 // compile the contract to create prover keys
 console.log('compile the contract...');
 await Accounts.compile();
@@ -56,16 +51,16 @@ await Accounts.compile();
 // call update() and send transaction
 console.log('build transaction and create proof...');
 let tx = await Mina.transaction({ feePayerKey: zkAppKey, fee: 0.1e9 }, () => {
-  // zkApp.setTrustedOracle(PublicKey.fromBase58('B62qkqYvABDBT2vLZnM7WuVGqJL1QvPEwrLnMTyxRRqRTEyrWebiTUr'));
-
-  // zkApp.updateController(EthAddress.fromString('0xC5E5b8D6fF6f1785E536588a68Ef3C162C41119B'));
   zkApp.setOwner(
     PublicKey.fromBase58(
       'B62qkqYvABDBT2vLZnM7WuVGqJL1QvPEwrLnMTyxRRqRTEyrWebiTUr'
     )
   );
 });
+
+console.log('Creating proofs');
 await tx.prove();
+
 console.log('send transaction...');
 let sentTx = await tx.send();
 
@@ -78,4 +73,5 @@ if (sentTx.hash() !== undefined) {
     https://berkeley.minaexplorer.com/transaction/${sentTx.hash()}
   `);
 }
+
 shutdown();

@@ -12,6 +12,12 @@
       "keyPath": "keys/berkeley-alternate.json",
       "fee": "0.1",
       "smartContract": "Accounts"
+    },
+    "second": {
+      "url": "https://proxy.berkeley.minaexplorer.com/graphql",
+      "keyPath": "keys/second.json",
+      "fee": "0.1",
+      "smartContract": "Accounts"
     }
   }
 }

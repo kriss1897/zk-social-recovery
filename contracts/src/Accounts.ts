@@ -20,10 +20,6 @@ export class EthAddress extends Struct({ partOne: Field, partTwo: Field }) {
   }
 
   toString() {
-    if (this.partOne.isZero() || this.partTwo.isZero()) {
-      return '0x';
-    }
-
     return Encoding.stringFromFields([this.partOne, this.partTwo]);
   }
 
@@ -73,11 +69,8 @@ export class Accounts extends SmartContract {
     const owner = this.owner.get();
     this.owner.assertEquals(owner);
 
-    const nonce = this.account.nonce.get();
-    this.account.nonce.assertEquals(nonce);
-
     ownerSignature
-      .verify(owner, newOracle.toFields().concat(nonce.toFields()))
+      .verify(owner, newOracle.toFields())
       .assertTrue('Invalid owner signature');
 
     const oracle = this.trustedOracle.get();
@@ -103,15 +96,7 @@ export class Accounts extends SmartContract {
     const nonce = this.account.nonce.get();
     this.account.nonce.assertEquals(nonce);
 
-    oracleSignature
-      .verify(
-        oracle,
-        address
-          .toFields()
-          .concat(currentController.toFields())
-          .concat(nonce.toFields())
-      )
-      .assertTrue();
+    oracleSignature.verify(oracle, address.toFields()).assertTrue();
 
     this.controller.set(address);
   }

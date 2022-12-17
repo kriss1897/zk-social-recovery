@@ -5,13 +5,16 @@ import {
   PrivateKey,
   Field,
   fetchAccount,
+  zkappCommandToJson,
+  Signature,
 } from 'snarkyjs'
 
 type Transaction = Awaited<ReturnType<typeof Mina.transaction>>;
 
 // ---------------------------------------------------------------------------------------
 
-import type { Accounts } from '../../contracts/src/Accounts';
+import { Accounts } from '../../contracts/src/Accounts';
+import { EthAddress } from '../../contracts/build/src/Accounts';
 
 const state = {
   signerKey: null as null | PrivateKey, 
@@ -51,33 +54,79 @@ const functions = {
     state.zkapp = new state.Accounts!(publicKey);
   },
   getState: async (args: {}) => {
-    const [controller, googleId, trustedOracle, owner] = await Promise.all([
+    const [controller, googleId, trustedOracle, owner, nonce] = await Promise.all([
       state.zkapp!.controller.get(),
       state.zkapp!.googleId.get(),
       state.zkapp!.trustedOracle.fetch(),
-      state.zkapp!.owner.fetch()
+      state.zkapp!.owner.fetch(),
+      state.zkapp?.account.nonce.get()
     ]);
 
-    return JSON.stringify({
-      controller: controller.toString(),
-      googleId: googleId.toString(),
-      trustedOracle: trustedOracle?.toBase58().toString(),
-      owner: owner?.toBase58().toString()
-    });
+    let safeParse;
+
+    try {
+      safeParse = controller.toString()
+    } catch {
+      safeParse = '0x'
+    } finally {
+      return JSON.stringify({
+        controller: safeParse,
+        googleId: googleId.toString(),
+        trustedOracle: trustedOracle?.toBase58().toString(),
+        owner: owner?.toBase58().toString(),
+        nonce: nonce?.toString()
+      });
+    }
   },
-  // updateController: async (args: {}) => {
-  //   const transaction = await Mina.transaction(() => {
-  //       state.zkapp!.updateController;
-  //     }
-  //   );
-  //   state.transaction = transaction;
-  // },
-  // proveUpdateTransaction: async (args: {}) => {
-  //   await state.transaction!.prove();
-  // },
-  // getTransactionJSON: async (args: {}) => {
-  //   return state.transaction!.toJSON();
-  // },
+  setOracle: async (oracleAddress: string) => {
+    const oracleKey = PublicKey.fromBase58(oracleAddress);
+    if (!state.signerKey) {
+      return;
+    }
+
+    const sign = Signature.create(state.signerKey, oracleKey.toFields());
+
+    const transaction = await Mina.transaction(() => {
+        state.zkapp!.setTrustedOracle(oracleKey, sign);
+      }
+    );
+
+    await transaction.prove();
+
+    return transaction.toJSON();
+  },
+  setController: async (controllerAddress: string) => {
+    const address = EthAddress.fromString(controllerAddress);
+
+    if (!state.signerKey) {
+      return;
+    }
+
+    const sign = Signature.create(state.signerKey, address.toFields());
+
+    const transaction = await Mina.transaction(() => {
+        state.zkapp!.setController(address, sign);
+      }
+    );
+
+    await transaction.prove();
+    return transaction.toJSON();
+  },
+  claimApp: async (owner: string) => {
+    const address = PublicKey.fromBase58(owner);
+
+    if (!state.signerKey) {
+      return;
+    }
+
+    const transaction = await Mina.transaction(() => {
+        state.zkapp?.setOwner(address)
+      }
+    );
+
+    await transaction.prove();
+    return transaction.toJSON();
+  }
 };
 
 // ---------------------------------------------------------------------------------------

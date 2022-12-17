@@ -45,6 +45,24 @@ export default class ZkappWorkerClient {
     return JSON.parse(result as string);
   }
 
+  async setOracle(oracleKey: string): Promise<any> {
+    const result = await this._call('setOracle', oracleKey);
+
+    return result;
+  }
+
+  async setController (controllerAddr: string): Promise<any> {
+    const result = await this._call('setController', controllerAddr);
+
+    return result;
+  }
+
+  async setOwner (ownerAddr: string): Promise<any> {
+    const result = await this._call('claimApp', ownerAddr);
+
+    return result;
+  }
+
   // createUpdateTransaction() {
   //   return this._call('createUpdateTransaction', {});
   // }
